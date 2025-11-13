@@ -1,0 +1,11 @@
+{"id": "polar-sync",
+ "name": "Polar AccessLink Sync",
+ "version": "0.0.1",
+ "minAppVersion": "0.16.0",
+ "description": "Syncs all user data from Polar AccessLink API to Obsidian vault as Markdown notes.",
+ "author": "ultrapolar/copilot",
+ "authorUrl": "",
+ "fundingUrl": "",
+ "repo": "",
+ "keywords": ["polar", "accesslink", "obsidian", "sync", "plugin"],
+ "main": "main.ts"}
