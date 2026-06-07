@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Generated outputs
+*.csv
+*.xlsx
+*.analytics.json
+
+# Cached audiobook transcripts (live next to the audio, but ignore if any land here)
+*.transcript.txt
+*.transcript.json
+
+# Generated Obsidian notes
+*(full text).md
+*(highlights).md
+
+# Scratch / temp files used during development
+_*.py
+_*.png
+_*.pdf
