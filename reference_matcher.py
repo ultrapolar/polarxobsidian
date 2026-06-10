@@ -257,6 +257,7 @@ class MultiReferenceCorrector:
         if not sentences:
             return Correction(ocr_text, 0.0, None, False)
 
+        from grammar_corrector import grammar_fix
         from spell_corrector import spell_fix
         from text_utils import smart_join
 
@@ -272,8 +273,9 @@ class MultiReferenceCorrector:
                 piece = best.text
                 matched_scores.append(best.score)
             else:
-                # Not in any reference (or different wording): spell-check it.
-                piece = spell_fix(sent)
+                # Not in any reference (or different wording): spell-check,
+                # then context-aware LanguageTool fixes.
+                piece = grammar_fix(spell_fix(sent))
             # Join trimming any duplicated words at the seam (sentence-level
             # matches can repeat a phrase across a boundary).
             text = smart_join(text, piece)

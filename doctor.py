@@ -64,6 +64,22 @@ def check_environment(log=print):
     except Exception as e:
         log(f"  faster-whisper not available ({str(e)[:60]})")
 
+    log("\nContext-aware correction layers (optional — used when no reference matches):")
+    try:
+        import grammar_corrector
+        log(f"  [{_status(grammar_corrector.is_available())}] LanguageTool "
+            f"(needs Java; deterministic misspelling fixes)")
+    except Exception:
+        log(f"  [{_status(False)}] LanguageTool")
+    try:
+        import llm_corrector
+        from config import LLM_MODEL
+        ok = llm_corrector.is_available()
+        log(f"  [{_status(ok)}] Local LLM via Ollama ({LLM_MODEL}; "
+            f"real-word OCR fixes, guard-railed)")
+    except Exception:
+        log(f"  [{_status(False)}] Local LLM via Ollama")
+
     log("\nEverything runs locally. The only time internet is used is a one-time")
     log("Whisper model download the first time you transcribe an audiobook.")
     log("\n" + ("READY — all required components present."

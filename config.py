@@ -64,6 +64,21 @@ AUDIO_LANGUAGE = "en"           # force language (None = auto-detect, slower)
 SPELLCHECK_MIN_WORD_LEN = 5     # ignore short tokens (avoids tech->teach style harm)
 SPELLCHECK_MAX_WORD_LEN = 18    # ignore very long tokens (likely OCR garbage / joined words)
 
+# Layered context-aware correction (applied to text no reference matched)
+# Layer 1 — LanguageTool (local Java server): deterministic misspelling fixes
+# with context ("crip"->"trip"). No-op when Java/LT is unavailable.
+GRAMMAR_ENABLED = True
+GRAMMAR_MAX_EDIT_DISTANCE = 2   # replacement must be this close to the original word
+# Layer 2 — local LLM via Ollama: real-word OCR errors ("chat"->"that").
+# Guard-railed: only small word-level substitutions are accepted, so quotes can
+# be repaired but never reworded. No-op when Ollama/model is unavailable.
+LLM_ENABLED = True
+LLM_MODEL = "qwen2.5:3b"
+LLM_URL = "http://localhost:11434"
+LLM_TIMEOUT = 90                # seconds per passage
+LLM_MAX_WORD_EDIT = 2           # max edit distance per substituted word
+LLM_MAX_EDITS = 6               # max substituted words per passage (no insert/delete ever)
+
 # Obsidian export (full-text archive + linked highlights note)
 ARCHIVE_PARAGRAPH_SENTENCES = 4   # sentences per paragraph in the archived full text
 # Which reference becomes the archived full text, best (cleanest) first.

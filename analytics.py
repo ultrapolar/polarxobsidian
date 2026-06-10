@@ -11,7 +11,8 @@ import json
 
 def build_analytics(*, input_path, input_kind, pages_total, pages_processed,
                     pages_with_highlights, results, color_counts, cross_page_merged,
-                    reference_matched, sources, archive_located, outputs):
+                    reference_matched, sources, archive_located, outputs,
+                    correction_layers=None):
     """Assemble the analytics dict from collected run data."""
     total = len(results)
     spell_only = total - reference_matched
@@ -68,6 +69,7 @@ def build_analytics(*, input_path, input_kind, pages_total, pages_processed,
             "match_rate_pct": round(100 * reference_matched / total, 1) if total else 0.0,
             "archive_links": archive_located,
         },
+        "correction_layers": correction_layers or {},
         "references": refs,
         "outputs": outputs,
     }
