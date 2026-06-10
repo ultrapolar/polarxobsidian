@@ -28,6 +28,15 @@ def build_analytics(*, input_path, input_kind, pages_total, pages_processed,
             entry["transcription"] = s["transcription"]
         refs.append(entry)
 
+    from config import REVIEW_CONFIDENCE_THRESHOLD
+
+    confidences = [r.get("confidence", 0.0) for r in results]
+    review_rows = [
+        {"page": r["page"], "confidence": r.get("confidence"),
+         "text": r["highlight_text"][:80]}
+        for r in results if r.get("review")
+    ]
+
     return {
         "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
         "input": {
@@ -36,6 +45,13 @@ def build_analytics(*, input_path, input_kind, pages_total, pages_processed,
             "pages_total": pages_total,
             "pages_processed": pages_processed,
             "pages_with_highlights": pages_with_highlights,
+        },
+        "confidence": {
+            "mean": round(sum(confidences) / len(confidences), 1) if confidences else 0.0,
+            "min": min(confidences) if confidences else 0.0,
+            "threshold": REVIEW_CONFIDENCE_THRESHOLD,
+            "flagged_for_review": len(review_rows),
+            "review_rows": review_rows,
         },
         "highlights": {
             "total": total,
@@ -67,12 +83,16 @@ def summary_lines(analytics):
     hi = analytics["highlights"]
     inp = analytics["input"]
     corr = analytics["correction"]
+    conf = analytics.get("confidence", {})
     lines = [
         "-------- Run summary --------",
         f"Input: {inp['type']} | {inp['pages_processed']}/{inp['pages_total']} "
         f"pages processed | {inp['pages_with_highlights']} with highlights",
         f"Highlights: {hi['total']} total | by colour "
         f"{hi['by_color']} | {hi['cross_page_merged']} merged across pages",
+        f"Confidence: mean {conf.get('mean')} | min {conf.get('min')} | "
+        f"{conf.get('flagged_for_review')} row(s) below "
+        f"{conf.get('threshold')} flagged for review",
     ]
     if corr["references_used"]:
         lines.append(

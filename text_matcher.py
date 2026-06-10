@@ -170,6 +170,12 @@ def extract_highlight_passages(highlights, ocr_words, max_gap=MAX_PASSAGE_GAP,
             "after": after,
             "color": color,
             "mark_phrases": mark_phrases,
+            # Mean Tesseract confidence of the passage's words (0-100): the raw
+            # transcription-quality signal carried through to analytics.
+            "ocr_conf": round(
+                sum(w.conf for w in ordered[hw_start:hw_end + 1])
+                / (hw_end - hw_start + 1), 1
+            ),
             "start_y": ordered[hw_start].y,
             "end_y": ordered[hw_end].y + ordered[hw_end].h,
         })

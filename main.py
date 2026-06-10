@@ -9,7 +9,7 @@ from config import DEFAULT_DPI
 from csv_exporter import export_to_csv
 from excel_exporter import export_to_excel
 from highlight_detector import detect_highlights
-from ocr_engine import run_ocr
+from ocr_engine import run_ocr_best
 from page_merger import merge_cross_page
 from spell_corrector import spell_fix
 from text_matcher import extract_highlight_passages
@@ -109,11 +109,15 @@ def _correct_text(results, sources, log):
         if multi is not None:
             c = multi.correct_passage(r["highlight_text"])
             r["highlight_text"] = c.text
+            r["match_score"] = c.score
+            r["match_fraction"] = c.fraction
             if c.matched:
                 r["matched"] = True
                 matched += 1
         else:
             r["highlight_text"] = spell_fix(r["highlight_text"])
+            r["match_score"] = 0.0
+            r["match_fraction"] = 0.0
         # Context sentences are spell-checked only — reference-correcting them
         # separately makes the matcher over-reach at sentence boundaries.
         r["before"] = spell_fix(r["before"])
@@ -170,7 +174,12 @@ def process_pdf(input_path, output_path, colors=None, dpi=DEFAULT_DPI,
         log(f"  Page {page_num}{'/' + str(total_pages) if total_pages else ''} ...")
         pages_processed += 1
         try:
-            ocr = run_ocr(prep_for_ocr(image))
+            # Accuracy-first OCR: retry with alternate variants when the page
+            # reads poorly, keeping the highest-confidence result.
+            ocr, variant = run_ocr_best(image, prep_for_ocr(image))
+            if variant != "prepped":
+                log(f"    low confidence -> retried, kept '{variant}' "
+                    f"(conf {ocr.mean_conf})")
         except Exception as e:
             log(f"  ! OCR failed on page {page_num}: {e} — skipping page.")
             continue
@@ -190,6 +199,7 @@ def process_pdf(input_path, output_path, colors=None, dpi=DEFAULT_DPI,
                 "after": passage["after"],
                 "color": passage["color"],
                 "mark_phrases": passage["mark_phrases"],
+                "ocr_conf": passage["ocr_conf"],
                 "start_y": passage["start_y"],
                 "end_y": passage["end_y"],
                 "start_page_height": page_height,
@@ -211,6 +221,16 @@ def process_pdf(input_path, output_path, colors=None, dpi=DEFAULT_DPI,
     cross_page_merged = before_merge - len(results)
     if cross_page_merged:
         log(f"  Merged {cross_page_merged} cross-page highlight(s).")
+
+    # Per-highlight confidence (0-100): for the reference-matched share of the
+    # passage use the match score (the text was replaced with the book's own
+    # wording); for the rest use raw OCR confidence. Low rows get a review flag.
+    from config import REVIEW_CONFIDENCE_THRESHOLD
+    for r in results:
+        f = r.get("match_fraction", 0.0)
+        conf = f * r.get("match_score", 0.0) + (1 - f) * r.get("ocr_conf", 0.0)
+        r["confidence"] = round(conf, 1)
+        r["review"] = conf < REVIEW_CONFIDENCE_THRESHOLD
 
     for r in results:
         r["parts"] = _build_parts(

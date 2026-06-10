@@ -53,13 +53,20 @@ input (PDF | image | image folder)
   cleanly. Detection still uses the original colour image. Toggle: `OCR_PREP_ENABLED`.
 
 ### OCR — `ocr_engine.py`
-- `run_ocr(image)` → `OCRResult(full_text, words)`, each `OCRWord` carrying text +
-  bounding box + block/par/line indices. Auto-locates **Tesseract** on Windows.
+- `run_ocr(image, psm)` → `OCRResult(full_text, words, mean_conf)`, each `OCRWord`
+  carrying text + bounding box + block/par/line indices + Tesseract confidence.
+  Auto-locates **Tesseract** on Windows. Single Tesseract pass per call.
+- `run_ocr_best(image, prepped)` — accuracy-first: if the prepped image reads
+  below `OCR_RETRY_MIN_CONF`, retries with the original image, auto-PSM (3), and
+  a 1.5× upscale (boxes mapped back), keeping the highest mean confidence.
 
 ### Highlight detection — `highlight_detector.py` + `color_profiles.py`
 - `detect_highlights(image, colors)` — HSV `inRange` per colour + morphology →
   bounding boxes (color, bbox). `color_profiles.HIGHLIGHT_PROFILES` holds the HSV
   ranges for yellow/green/pink/blue/orange (tuned to ignore yellowed paper).
+- Pixel constants (`MIN_HIGHLIGHT_AREA`, kernels) are defined at
+  `DETECT_REFERENCE_WIDTH` and **scaled to the actual image width**, so scans,
+  photos, and different DPIs detect the same physical highlight identically.
 
 ### Passage assembly — `text_matcher.py`
 - `extract_highlight_passages(highlights, ocr_words)` — the heart of "what is a
@@ -76,8 +83,11 @@ input (PDF | image | image folder)
 - `audio_transcriber.transcribe(path)` — faster-whisper, **GPU→CPU** fallback,
   cached to `*.transcript.txt` (+ a `.json` of confidence/duration/model). Handles
   a single file or a folder of chapter files. CUDA DLLs are preloaded on Windows.
-- `ReferenceCorrector` — fuzzy-aligns one sentence to one reference using a moving
-  cursor (in reading order) with a strict re-anchor threshold + length guard.
+- `ReferenceCorrector` — fuzzy-aligns one sentence to one reference. Searches
+  BOTH the in-order window ahead of the cursor and the whole book; the window
+  match wins unless the global match is clearly better (`REFERENCE_GLOBAL_MARGIN`),
+  and a global-only match must clear the stricter re-anchor bar. Length guard
+  rejects spurious spans.
 - `MultiReferenceCorrector.correct_passage()` — splits a passage into sentences and
   matches **each sentence against every reference**, keeping the best confident hit;
   unmatched sentences fall back to `spell_corrector.spell_fix` (conservative —
@@ -121,12 +131,21 @@ Whisper models, spell-check bounds, Obsidian colours/priority.
 ## The `result` dict (flows from assembly to export)
 
 ```
-page, highlight_text, before, after, color, mark_phrases,
+page, highlight_text, before, after, color, mark_phrases, ocr_conf,
+match_score, match_fraction, confidence, review,
 start_y, end_y, start_page_height, end_page_height, matched, parts, spans_pages?
 ```
 
 `mark_phrases` is a list of `(phrase, colour_name)`; `parts` is the
 `[(text, is_bold)]` the exporters render; `matched` flags reference-corrected.
+
+**Per-highlight confidence** (0-100): `confidence = match_fraction × match_score
++ (1 − match_fraction) × ocr_conf` — the reference-matched share of a passage is
+scored by its fuzzy-match quality (the text was replaced with the book's own
+wording), the rest by raw Tesseract word confidence. Rows below
+`REVIEW_CONFIDENCE_THRESHOLD` get `review=True` → highlighted "REVIEW" rows in
+the XLSX and a `review_rows` list in the analytics JSON. The Readwise CSV stays
+clean (no extra columns).
 
 ## Running locally
 
