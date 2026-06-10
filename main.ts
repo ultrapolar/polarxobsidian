@@ -1,6 +1,5 @@
 import { Plugin, Notice } from "obsidian";
 
-// -- BEGIN CONFIG INTERFACE --
 interface PolarConfig {
 	clientId: string;
 	clientSecret: string;
@@ -8,12 +7,13 @@ interface PolarConfig {
 	userId?: string;
 }
 
-// This config should be replaced with a settings tab later for user entry
+// Replace with a settings tab later for user entry
 const DEFAULT_CONFIG: PolarConfig = {
 	clientId: "YOUR_CLIENT_ID",
 	clientSecret: "YOUR_CLIENT_SECRET",
 };
-// -- END CONFIG INTERFACE --
+
+const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export default class PolarSyncPlugin extends Plugin {
 	config: PolarConfig = DEFAULT_CONFIG;
@@ -22,37 +22,38 @@ export default class PolarSyncPlugin extends Plugin {
 		this.addCommand({
 			id: "polar-sync-manual",
 			name: "Sync Polar AccessLink Data",
-			callback: () => this.syncPolarData()
+			callback: () => this.syncPolarData(),
 		});
 
-		// Trigger on vault open
-		this.registerEvent(
-			this.app.vault.on('open', () => this.syncPolarData())
-		);
-
-		// Daily sync (every 24h)
-		this.registerInterval(window.setInterval(() => this.syncPolarData(), 1000 * 60 * 60 * 24));
+		// Sync once on startup, then every 24h
+		this.app.workspace.onLayoutReady(() => this.syncPolarData());
+		this.registerInterval(window.setInterval(() => this.syncPolarData(), SYNC_INTERVAL_MS));
 	}
 
 	async syncPolarData() {
-		let rawData: Record<string, any> = {};
-
-		if (!this.config.accessToken) {
+		const { accessToken, userId } = this.config;
+		if (!accessToken) {
 			new Notice("Polar Access Token is missing. Connect your account.");
 			return;
 		}
 
-		try {
-			rawData['exercises'] = await fetchPolar("exercises", this.config.accessToken);
-			rawData['sleep'] = await fetchPolar("users/sleep/", this.config.accessToken);
-			rawData['recharge'] = await fetchPolar("users/nightly-recharge/", this.config.accessToken);
-			rawData['user'] = await fetchPolar("users/" + this.config.userId, this.config.accessToken);
+		const endpoints: Record<string, string> = {
+			exercises: "exercises",
+			sleep: "users/sleep/",
+			recharge: "users/nightly-recharge/",
+			user: `users/${userId}`,
+		};
 
-			const md = formatPolarDataMd(rawData);
-			await this.app.vault.create(
-				`PolarData_${new Date().toISOString()}.md`,
-				md
+		try {
+			const entries = await Promise.all(
+				Object.entries(endpoints).map(
+					async ([section, endpoint]) => [section, await fetchPolar(endpoint, accessToken)] as const
+				)
 			);
+
+			// ISO timestamps contain colons, which are invalid in filenames on most platforms
+			const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+			await this.app.vault.create(`PolarData_${stamp}.md`, formatPolarDataMd(Object.fromEntries(entries)));
 
 			new Notice("Polar data synced to vault!");
 		} catch (e) {
@@ -62,31 +63,18 @@ export default class PolarSyncPlugin extends Plugin {
 	}
 }
 
-// -- SUPPORT FUNCTIONS --
-
-// Very basic data fetch function (add OAuth2 handling for full implementation!)
+// Basic data fetch (add OAuth2 handling for full implementation!)
 async function fetchPolar(endpoint: string, token: string) {
-	const url = `https://www.polaraccesslink.com/v3/${endpoint}`;
-	const resp = await fetch(url, {
-		headers: {
-			Authorization: `Bearer ${token}`,
-			'Accept': 'application/json',
-		},
+	const resp = await fetch(`https://www.polaraccesslink.com/v3/${endpoint}`, {
+		headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
 	});
+	if (!resp.ok) throw new Error(`Polar API ${endpoint} responded ${resp.status}`);
 	return resp.json();
 }
 
-// Markdown formatter for the fetched data
-function formatPolarDataMd(data: Record<string, any>): string {
-	let md = `# Polar Data - ${new Date().toLocaleString()}
-`;
-	for (const [section, content] of Object.entries(data)) {
-		md += `## ${section}
-
-`;
-		md += '```json
-' + JSON.stringify(content, null, 2) + '\n```
-';
-	}
-	return md;
+function formatPolarDataMd(data: Record<string, unknown>): string {
+	const sections = Object.entries(data).map(
+		([section, content]) => `## ${section}\n\n\`\`\`json\n${JSON.stringify(content, null, 2)}\n\`\`\`\n`
+	);
+	return [`# Polar Data - ${new Date().toLocaleString()}`, ...sections].join("\n");
 }
