@@ -94,6 +94,11 @@ def merge_cross_page(results, ref_texts=None):
                 "end_y": cur["end_y"],
                 "end_page_height": cur.get("end_page_height"),
                 "spans_pages": (prev.get("spans_pages", (prev["page"],))[0], cur["page"]),
+                # Confidence inputs: take the weaker half (conservative).
+                "ocr_conf": min(prev.get("ocr_conf", 0), cur.get("ocr_conf", 0)),
+                "match_score": min(prev.get("match_score", 0), cur.get("match_score", 0)),
+                "match_fraction": min(prev.get("match_fraction", 0), cur.get("match_fraction", 0)),
+                "matched": prev.get("matched") or cur.get("matched"),
             })
             continue
         merged.append(dict(cur))

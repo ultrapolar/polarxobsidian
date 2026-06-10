@@ -145,6 +145,7 @@ class Correction:
     score: float        # match confidence 0-100
     span: tuple         # (start, end) char offsets in the reference, or None
     matched: bool       # True if a confident reference match was found
+    fraction: float = 0.0   # fraction of the passage's sentences that matched
 
 
 class ReferenceCorrector:
@@ -200,16 +201,30 @@ class ReferenceCorrector:
         if len(ocr_lower) < REFERENCE_MIN_OCR_CHARS:
             return Correction(ocr_text, 0.0, None, False)
 
-        # 1) Search a window just ahead of the last match (fast, order-aware).
+        # Search BOTH the in-order window ahead of the cursor and the whole book,
+        # then arbitrate. Window-only matching can lock onto a mediocre local
+        # match and mis-anchor everything after it; global-only matching loses
+        # the reading-order signal. Running both costs more time but is the most
+        # accurate: the window match wins unless the global match is clearly
+        # better (by REFERENCE_GLOBAL_MARGIN), and a global match alone must
+        # clear the stricter re-anchor bar.
+        from config import REFERENCE_GLOBAL_MARGIN
+
         win_start = max(0, self.cursor - self.lookback)
         win_end = min(len(self.ref), win_start + self.window)
-        hit = self._align(
+        local = self._align(
             ocr_lower, self.ref_lower[win_start:win_end], win_start, self.min_score
         )
+        global_ = self._align(ocr_lower, self.ref_lower, 0, self.min_score)
 
-        # 2) Fall back to a stricter full-book search to re-anchor if needed.
-        if hit is None:
-            hit = self._align(ocr_lower, self.ref_lower, 0, self.reanchor_score)
+        if local and global_:
+            hit = global_ if global_[0] > local[0] + REFERENCE_GLOBAL_MARGIN else local
+        elif local:
+            hit = local
+        elif global_ and global_[0] >= self.reanchor_score:
+            hit = global_
+        else:
+            hit = None
 
         if hit is None:
             return Correction(ocr_text, 0.0, None, False)
@@ -246,7 +261,7 @@ class MultiReferenceCorrector:
         from text_utils import smart_join
 
         text = ""
-        matched_any = False
+        matched_scores = []
         for sent in sentences:
             best = None
             for corrector in self.correctors:
@@ -255,7 +270,7 @@ class MultiReferenceCorrector:
                     best = c
             if best is not None:
                 piece = best.text
-                matched_any = True
+                matched_scores.append(best.score)
             else:
                 # Not in any reference (or different wording): spell-check it.
                 piece = spell_fix(sent)
@@ -263,5 +278,8 @@ class MultiReferenceCorrector:
             # matches can repeat a phrase across a boundary).
             text = smart_join(text, piece)
 
-        return Correction(text.strip(), 100.0 if matched_any else 0.0,
-                          None, matched_any)
+        matched_any = bool(matched_scores)
+        mean_score = (round(sum(matched_scores) / len(matched_scores), 1)
+                      if matched_scores else 0.0)
+        fraction = round(len(matched_scores) / len(sentences), 3)
+        return Correction(text.strip(), mean_score, None, matched_any, fraction)

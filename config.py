@@ -4,14 +4,23 @@
 DEFAULT_DPI = 300
 
 # Highlight detection
-MIN_HIGHLIGHT_AREA = 500        # pixels² - smaller contours are noise
-CLOSE_KERNEL_SIZE = (40, 5)     # bridge gaps along text lines
-OPEN_KERNEL_SIZE = (5, 5)       # remove speckle noise
+# The pixel constants below were tuned at DETECT_REFERENCE_WIDTH; at runtime they
+# are scaled by (image_width / DETECT_REFERENCE_WIDTH) so the same physical
+# highlight is detected identically across scans, photos, and DPI settings.
+DETECT_REFERENCE_WIDTH = 1300   # page width (px) the constants were tuned at
+MIN_HIGHLIGHT_AREA = 500        # pixels² at reference width - smaller is noise
+CLOSE_KERNEL_SIZE = (40, 5)     # bridge gaps along text lines (at reference width)
+OPEN_KERNEL_SIZE = (5, 5)       # remove speckle noise (at reference width)
 
 # OCR
 OCR_CONFIDENCE_THRESHOLD = 30   # discard words below this confidence
 TESSERACT_PSM = 6               # assume single uniform block of text
 OCR_PREP_ENABLED = True         # neutralise highlighter colour before OCR (max-channel)
+# Accuracy-first OCR retries: if a page's mean word confidence is below this,
+# re-OCR with alternate variants (original image, auto-PSM, upscaled) and keep
+# the best. Costs extra time only on weak pages.
+OCR_RETRY_MIN_CONF = 80
+OCR_UPSCALE = 1.5               # upscale factor for the retry variant
 
 # Text matching
 WORD_OVERLAP_THRESHOLD = 0.3    # 30% of word width must be inside highlight
@@ -35,6 +44,11 @@ REFERENCE_WINDOW_LOOKBACK = 1500  # chars searched behind the cursor (for slight
 REFERENCE_LEN_MIN_RATIO = 0.5   # reject if matched span is < this fraction of the OCR length
 REFERENCE_LEN_MAX_RATIO = 2.0   # reject if matched span is > this multiple of the OCR length
 REFERENCE_MERGE_GAP = 40        # reference chars between two spans to still merge across pages
+REFERENCE_GLOBAL_MARGIN = 5     # a global match must beat the window match by this to win
+
+# Per-highlight confidence (0-100): blend of reference match score and OCR word
+# confidence. Rows below the threshold are flagged "review" in the XLSX/analytics.
+REVIEW_CONFIDENCE_THRESHOLD = 70
 
 # Audio reference transcription (faster-whisper)
 # distil-large-v3 is English-only but ~6x faster than large-v3 with near-equal
