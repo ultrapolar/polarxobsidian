@@ -135,9 +135,18 @@ only sentences whose wording is identical across editions get corrected (often
 ~20–40%). A reference of the **same edition** as your scanned book (or its
 unabridged audiobook) corrects the large majority.
 
-Without a reference, the program still runs — it spell-checks obvious non-words
-and merges page-spanning highlights using page geometry — but real-word OCR
-errors will remain. Expect to proofread.
+Without a reference, the program still runs — text falls through three layered
+local correctors instead:
+
+1. **Spell-check** (non-words: `cransformation` → `transformation`),
+2. **LanguageTool** (context-aware misspellings: `crip` → `trip`, `che` → `the`;
+   needs Java — already a no-op if missing),
+3. **Local LLM via Ollama** (real-word OCR errors only context reveals:
+   `chat` → `that`; guard-railed to word-for-word substitutions so quotes are
+   never reworded or shortened; needs Ollama + the model in `config.LLM_MODEL`).
+
+All three are local. A reference is still the gold standard — these layers are
+the safety net, and remaining doubt shows up as REVIEW flags in the XLSX.
 
 ## Obsidian notes (full-text archive + linked highlights)
 

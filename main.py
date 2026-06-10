@@ -104,6 +104,8 @@ def _correct_text(results, sources, log):
     correctors = [ReferenceCorrector(s["text"]) for s in sources if s.get("text")]
     multi = MultiReferenceCorrector(correctors) if correctors else None
 
+    from grammar_corrector import grammar_fix
+
     matched = 0
     for r in results:
         if multi is not None:
@@ -115,13 +117,13 @@ def _correct_text(results, sources, log):
                 r["matched"] = True
                 matched += 1
         else:
-            r["highlight_text"] = spell_fix(r["highlight_text"])
+            r["highlight_text"] = grammar_fix(spell_fix(r["highlight_text"]))
             r["match_score"] = 0.0
             r["match_fraction"] = 0.0
-        # Context sentences are spell-checked only — reference-correcting them
-        # separately makes the matcher over-reach at sentence boundaries.
-        r["before"] = spell_fix(r["before"])
-        r["after"] = spell_fix(r["after"])
+        # Context sentences get the cheap layers only — reference-correcting
+        # them separately makes the matcher over-reach at sentence boundaries.
+        r["before"] = grammar_fix(spell_fix(r["before"]))
+        r["after"] = grammar_fix(spell_fix(r["after"]))
 
     if multi is not None:
         log(f"  Reference-matched {matched}/{len(results)} passages "
@@ -157,6 +159,11 @@ def process_pdf(input_path, output_path, colors=None, dpi=DEFAULT_DPI,
         colors = ALL_COLORS
     if isinstance(references, str):
         references = [references]
+
+    import grammar_corrector
+    import llm_corrector as _llm
+    grammar_corrector.reset_stats()
+    _llm.reset_stats()
 
     kind = input_kind(input_path)
     total_pages = count_pages(input_path)
@@ -222,6 +229,23 @@ def process_pdf(input_path, output_path, colors=None, dpi=DEFAULT_DPI,
     if cross_page_merged:
         log(f"  Merged {cross_page_merged} cross-page highlight(s).")
 
+    # Stage 4b: local-LLM repair of real-word OCR errors ("chat" -> "that") on
+    # text no reference matched. Guard-railed so quotes are never reworded.
+    from config import LLM_MODEL
+    todo = [r for r in results if r.get("match_fraction", 0.0) < 1.0]
+    if todo and _llm.is_available():
+        log(f"  LLM cleanup ({LLM_MODEL}) on {len(todo)} passage(s) "
+            f"with unmatched text ...")
+        for i, r in enumerate(todo):
+            r["highlight_text"] = _llm.llm_fix(r["highlight_text"])
+            if (i + 1) % 20 == 0:
+                log(f"    ... {i + 1}/{len(todo)}")
+        s = _llm.stats
+        log(f"  LLM repairs: {s['accepted']} accepted, {s['rejected']} rejected "
+            f"by the no-rewording guardrail.")
+    elif todo:
+        log("  LLM cleanup skipped (Ollama not running or model missing).")
+
     # Per-highlight confidence (0-100): for the reference-matched share of the
     # passage use the match score (the text was replaced with the book's own
     # wording); for the rest use raw OCR confidence. Low rows get a review flag.
@@ -268,6 +292,12 @@ def process_pdf(input_path, output_path, colors=None, dpi=DEFAULT_DPI,
         sources=sources, archive_located=archive_located,
         outputs={"csv": csv_path, "xlsx": xlsx_path, "archive_md": archive_path,
                  "highlights_md": highlights_path, "analytics_json": analytics_path},
+        correction_layers={
+            "languagetool": dict(grammar_corrector.stats,
+                                 available=grammar_corrector.is_available()),
+            "llm": dict(_llm.stats, available=_llm.is_available(),
+                        model=LLM_MODEL if _llm.is_available() else None),
+        },
     )
     write_analytics(analytics, analytics_path)
     log(f"Analytics saved to {analytics_path}")

@@ -90,8 +90,25 @@ input (PDF | image | image folder)
   rejects spurious spans.
 - `MultiReferenceCorrector.correct_passage()` — splits a passage into sentences and
   matches **each sentence against every reference**, keeping the best confident hit;
-  unmatched sentences fall back to `spell_corrector.spell_fix` (conservative —
-  only fixes clear non-words). Seams de-duplicated via `text_utils.smart_join`.
+  unmatched sentences fall through the layered cleanup below. Seams de-duplicated
+  via `text_utils.smart_join`.
+
+### Layered cleanup for text no reference matched
+1. `spell_corrector.spell_fix` — frequency spell-check, non-words only.
+2. `grammar_corrector.grammar_fix` — **LanguageTool** (local Java server):
+   context-aware misspelling fixes ("crip"→"trip", "che"→"the"). Only
+   `misspelling` matches applied; replacement must be within
+   `GRAMMAR_MAX_EDIT_DISTANCE` of the original; casing preserved. No-op if
+   Java/LT missing.
+3. `llm_corrector.llm_fix` — **local LLM via Ollama** (`LLM_MODEL`): repairs
+   real-word OCR errors only context reveals ("chat"→"that"). Guard-railed by
+   `_safe_accept`: word-for-word substitutions only (each within
+   `LLM_MAX_WORD_EDIT`), **insertions/deletions always rejected** — a quote can
+   be repaired but never reworded or shortened. Applied after merging, only to
+   passages with unmatched text. No-op if Ollama/model missing.
+
+Per-layer counters (fixes applied, LLM accepted/rejected) land in the analytics
+JSON under `correction_layers`.
 
 ### Cross-page merge — `page_merger.py`
 - `merge_cross_page(results, ref_texts)` — stitches a quote split across a page
