@@ -79,6 +79,14 @@ LLM_TIMEOUT = 90                # seconds per passage
 LLM_MAX_WORD_EDIT = 2           # max edit distance per substituted word
 LLM_MAX_EDITS = 6               # max substituted words per passage (no insert/delete ever)
 
+# Mixed-folder book classification (sort_books.py)
+CLASSIFY_SESSION_GAP_MIN = 10    # minutes between shots that starts a new session
+CLASSIFY_TITLE_MIN_SCORE = 85    # fuzzy score to accept a running-header/cover title
+CLASSIFY_REF_MIN_SCORE = 80      # fuzzy score to accept a reference-text match
+CLASSIFY_REF_RUNNERUP_MARGIN = 5  # winner must beat the runner-up by this much
+CLASSIFY_BODY_MIN_CHARS = 60     # need this much OCR text to try a reference match
+CLASSIFY_STRONG_SCORE = 90       # evidence this strong survives session smoothing
+
 # Obsidian export (full-text archive + linked highlights note)
 ARCHIVE_PARAGRAPH_SENTENCES = 4   # sentences per paragraph in the archived full text
 # Which reference becomes the archived full text, best (cleanest) first.

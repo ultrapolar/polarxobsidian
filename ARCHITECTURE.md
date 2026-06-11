@@ -36,6 +36,7 @@ input (PDF | image | image folder)
 | `gui.py` | Minimal Tkinter GUI: pick a **PDF** or **image folder**, add reference sources (file/audio folder), Extract, or Transcribe-only. Runs the pipeline on a worker thread. |
 | `transcribe.py` | Batch audiobook → cached transcript, no PDF. `python transcribe.py <audio...>`. |
 | `doctor.py` | `python main.py --check` — verifies local tools (Tesseract, Poppler, faster-whisper, GPU) and confirms offline operation. |
+| `sort_books.py` | Sorts a mixed folder of page photos into per-book folders. `python sort_books.py <folder> --book "Title" [REF ...] ...` — see `book_classifier.py`. |
 
 ## Stage modules
 
@@ -132,6 +133,16 @@ JSON under `correction_layers`.
   true-colour `<mark>` tags + block anchors (`^hl-0001`). **Highlights** note =
   each quote (context + marks) wiki-linked to its anchor. No reference ⇒ archive is
   built from the OCR text and stamped `status: pending-review`.
+
+### Mixed-folder classification — `book_classifier.py` + `sort_books.py`
+- For camera rolls containing several books. Per page: blank check (adaptive,
+  min-channel vs the page's own median brightness), running-header OCR fuzzy-
+  matched against known titles (covers match via the body strip), then a body
+  OCR strip matched against each book's reference text. Pages with weak/no
+  signal take their shooting session's majority (sessions = filename-timestamp
+  gaps > `CLASSIFY_SESSION_GAP_MIN`); strong conflicting evidence survives
+  smoothing. Pages are **copied** into per-book folders plus `_unsorted`, with
+  a `classification_manifest.json` recording every page's label/method/score.
 
 ### Analytics — `analytics.py`
 - Writes `<out>.analytics.json` and a printed summary: pages processed/with
