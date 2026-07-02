@@ -1,0 +1,22 @@
+{
+	"name": "polar-sync",
+	"version": "0.0.1",
+	"description": "Syncs user data from Polar AccessLink API to an Obsidian vault as Markdown notes.",
+	"main": "main.js",
+	"scripts": {
+		"build": "node esbuild.config.mjs production",
+		"dev": "node esbuild.config.mjs",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"keywords": ["polar", "accesslink", "obsidian", "sync", "plugin"],
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^22.10.0",
+		"esbuild": "^0.24.0",
+		"obsidian": "^1.7.2",
+		"tslib": "^2.8.0",
+		"typescript": "^5.7.0",
+		"vitest": "^2.1.0"
+	}
+}

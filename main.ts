@@ -1,4 +1,5 @@
 import { Plugin, Notice } from "obsidian";
+import { fetchPolar, formatPolarDataMd } from "./lib";
 
 // -- BEGIN CONFIG INTERFACE --
 interface PolarConfig {
@@ -25,10 +26,8 @@ export default class PolarSyncPlugin extends Plugin {
 			callback: () => this.syncPolarData()
 		});
 
-		// Trigger on vault open
-		this.registerEvent(
-			this.app.vault.on('open', () => this.syncPolarData())
-		);
+		// Trigger once the vault has finished opening
+		this.app.workspace.onLayoutReady(() => this.syncPolarData());
 
 		// Daily sync (every 24h)
 		this.registerInterval(window.setInterval(() => this.syncPolarData(), 1000 * 60 * 60 * 24));
@@ -60,33 +59,4 @@ export default class PolarSyncPlugin extends Plugin {
 			new Notice("Polar data sync failed.");
 		}
 	}
-}
-
-// -- SUPPORT FUNCTIONS --
-
-// Very basic data fetch function (add OAuth2 handling for full implementation!)
-async function fetchPolar(endpoint: string, token: string) {
-	const url = `https://www.polaraccesslink.com/v3/${endpoint}`;
-	const resp = await fetch(url, {
-		headers: {
-			Authorization: `Bearer ${token}`,
-			'Accept': 'application/json',
-		},
-	});
-	return resp.json();
-}
-
-// Markdown formatter for the fetched data
-function formatPolarDataMd(data: Record<string, any>): string {
-	let md = `# Polar Data - ${new Date().toLocaleString()}
-`;
-	for (const [section, content] of Object.entries(data)) {
-		md += `## ${section}
-
-`;
-		md += '```json
-' + JSON.stringify(content, null, 2) + '\n```
-';
-	}
-	return md;
 }

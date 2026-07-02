@@ -8,4 +8,4 @@
  "fundingUrl": "",
  "repo": "",
  "keywords": ["polar", "accesslink", "obsidian", "sync", "plugin"],
- "main": "main.ts"}
+ "main": "main.js"}
