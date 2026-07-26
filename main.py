@@ -231,10 +231,9 @@ def process_pdf(input_path, output_path, colors=None, dpi=DEFAULT_DPI,
 
     # Stage 4b: local-LLM repair of real-word OCR errors ("chat" -> "that") on
     # text no reference matched. Guard-railed so quotes are never reworded.
-    from config import LLM_MODEL
     todo = [r for r in results if r.get("match_fraction", 0.0) < 1.0]
     if todo and _llm.is_available():
-        log(f"  LLM cleanup ({LLM_MODEL}) on {len(todo)} passage(s) "
+        log(f"  LLM cleanup ({_llm.resolved_model()}) on {len(todo)} passage(s) "
             f"with unmatched text ...")
         for i, r in enumerate(todo):
             r["highlight_text"] = _llm.llm_fix(r["highlight_text"])
@@ -296,7 +295,7 @@ def process_pdf(input_path, output_path, colors=None, dpi=DEFAULT_DPI,
             "languagetool": dict(grammar_corrector.stats,
                                  available=grammar_corrector.is_available()),
             "llm": dict(_llm.stats, available=_llm.is_available(),
-                        model=LLM_MODEL if _llm.is_available() else None),
+                        model=_llm.resolved_model()),
         },
     )
     write_analytics(analytics, analytics_path)

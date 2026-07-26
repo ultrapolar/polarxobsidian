@@ -16,6 +16,7 @@ If Ollama isn't running or the model is missing, the layer is a no-op.
 
 import difflib
 import json
+import re
 import urllib.error
 import urllib.request
 
@@ -24,11 +25,13 @@ from config import (
     LLM_MAX_EDITS,
     LLM_MAX_WORD_EDIT,
     LLM_MODEL,
+    LLM_MODEL_FALLBACKS,
     LLM_TIMEOUT,
     LLM_URL,
 )
 
-_available = None   # tri-state: None = unchecked
+_available = None       # tri-state: None = unchecked
+_resolved_model = None  # the model name actually being used
 
 # Per-run counters, surfaced in analytics. Reset via reset_stats().
 stats = {"calls": 0, "accepted": 0, "rejected": 0}
@@ -49,9 +52,20 @@ def reset_stats():
     stats["rejected"] = 0
 
 
+def resolved_model():
+    """The model name actually in use (None until is_available() succeeds)."""
+    return _resolved_model
+
+
 def is_available():
-    """Check once whether Ollama is up and the model is present."""
-    global _available
+    """Check once whether Ollama is up and resolve which model to use.
+
+    The preferred model may not be installed (models get removed, renamed, or
+    pulled on a different machine). Rather than silently disabling this whole
+    correction layer, fall back through LLM_MODEL_FALLBACKS and finally to any
+    installed model — a working small model beats no context-aware correction.
+    """
+    global _available, _resolved_model
     if _available is not None:
         return _available
     if not LLM_ENABLED:
@@ -60,18 +74,38 @@ def is_available():
     try:
         with urllib.request.urlopen(f"{LLM_URL}/api/tags", timeout=5) as r:
             tags = json.load(r)
-        names = [m.get("name", "") for m in tags.get("models", [])]
-        _available = any(n.startswith(LLM_MODEL) for n in names)
+        names = [m.get("name", "") for m in tags.get("models", []) if m.get("name")]
     except Exception:
         _available = False
-    return _available
+        return False
+
+    for wanted in [LLM_MODEL, *LLM_MODEL_FALLBACKS]:
+        for n in names:
+            if n == wanted or n.startswith(wanted.split(":")[0] + ":"):
+                _resolved_model = n
+                _available = True
+                return True
+    if names:                       # last resort: whatever is installed
+        _resolved_model = names[0]
+        _available = True
+        return True
+    _available = False
+    return False
+
+
+def _strip_reasoning(text):
+    """Remove <think>...</think> blocks emitted by reasoning models."""
+    text = re.sub(r"(?is)<think>.*?</think>", " ", text)
+    text = re.sub(r"(?is)^.*?</think>", " ", text)   # unclosed/truncated open tag
+    return text.strip()
 
 
 def _generate(text):
     payload = json.dumps({
-        "model": LLM_MODEL,
+        "model": _resolved_model or LLM_MODEL,
         "prompt": _PROMPT.format(text=text),
         "stream": False,
+        "think": False,             # ignored by non-reasoning models
         "options": {"temperature": 0},
     }).encode("utf-8")
     req = urllib.request.Request(
@@ -79,7 +113,7 @@ def _generate(text):
         headers={"Content-Type": "application/json"},
     )
     with urllib.request.urlopen(req, timeout=LLM_TIMEOUT) as r:
-        return json.load(r).get("response", "").strip()
+        return _strip_reasoning(json.load(r).get("response", ""))
 
 
 def _safe_accept(original, proposed):

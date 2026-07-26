@@ -75,7 +75,8 @@ def check_environment(log=print):
         import llm_corrector
         from config import LLM_MODEL
         ok = llm_corrector.is_available()
-        log(f"  [{_status(ok)}] Local LLM via Ollama ({LLM_MODEL}; "
+        which = llm_corrector.resolved_model() or LLM_MODEL
+        log(f"  [{_status(ok)}] Local LLM via Ollama ({which}; "
             f"real-word OCR fixes, guard-railed)")
     except Exception:
         log(f"  [{_status(False)}] Local LLM via Ollama")

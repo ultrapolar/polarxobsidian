@@ -159,9 +159,15 @@ def transcribe(path, log=print):
     """
     cache = _cache_path(path)
     if os.path.isfile(cache):
-        log(f"  Using cached transcript: {os.path.basename(cache)}")
-        with open(cache, encoding="utf-8") as f:
-            return f.read()
+        # Validate before trusting: a crash mid-write can leave an empty or
+        # truncated cache (observed in the wild as a 0-byte transcript after a
+        # reboot). Tiny caches are treated as absent and re-transcribed.
+        if os.path.getsize(cache) >= 1000:
+            log(f"  Using cached transcript: {os.path.basename(cache)}")
+            with open(cache, encoding="utf-8") as f:
+                return f.read()
+        log(f"  ! cached transcript {os.path.basename(cache)} looks truncated "
+            f"({os.path.getsize(cache)} bytes) — re-transcribing.")
 
     files = _audio_files(path)
     if not files:
@@ -205,10 +211,16 @@ def transcribe(path, log=print):
     }
 
     try:
-        with open(cache, "w", encoding="utf-8") as f:
+        # Atomic writes: a crash mid-write must never leave a truncated cache
+        # that later runs would trust. Write to a temp file, then rename.
+        tmp = cache + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             f.write(text)
-        with open(_meta_path(path), "w", encoding="utf-8") as f:
+        os.replace(tmp, cache)
+        tmp_meta = _meta_path(path) + ".tmp"
+        with open(tmp_meta, "w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2)
+        os.replace(tmp_meta, _meta_path(path))
         conf_str = f", confidence {confidence}%" if confidence is not None else ""
         log(f"  Saved transcript ({len(text):,} chars{conf_str}) "
             f"to {os.path.basename(cache)}")
