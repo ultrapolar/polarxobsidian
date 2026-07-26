@@ -73,7 +73,10 @@ GRAMMAR_MAX_EDIT_DISTANCE = 2   # replacement must be this close to the original
 # Guard-railed: only small word-level substitutions are accepted, so quotes can
 # be repaired but never reworded. No-op when Ollama/model is unavailable.
 LLM_ENABLED = True
-LLM_MODEL = "qwen2.5:3b"
+LLM_MODEL = "qwen3:4b"
+# If LLM_MODEL isn't installed, try these in order, then any installed model —
+# a working small model beats silently losing the whole correction layer.
+LLM_MODEL_FALLBACKS = ["qwen2.5:3b", "llama3.2:3b", "gemma2:2b", "phi3:mini"]
 LLM_URL = "http://localhost:11434"
 LLM_TIMEOUT = 90                # seconds per passage
 LLM_MAX_WORD_EDIT = 2           # max edit distance per substituted word
