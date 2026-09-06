@@ -1,11 +1,10 @@
-{"id": "polar-sync",
- "name": "Polar AccessLink Sync",
- "version": "0.0.1",
- "minAppVersion": "0.16.0",
- "description": "Syncs all user data from Polar AccessLink API to Obsidian vault as Markdown notes.",
- "author": "ultrapolar/copilot",
- "authorUrl": "",
- "fundingUrl": "",
- "repo": "",
- "keywords": ["polar", "accesslink", "obsidian", "sync", "plugin"],
- "main": "main.ts"}
+{
+  "id": "polar-sync",
+  "name": "Polar Sync",
+  "version": "0.1.0",
+  "minAppVersion": "1.0.0",
+  "description": "Sync Polar Flow data (sleep, Nightly Recharge, exercises) into daily Obsidian notes via the Polar AccessLink API.",
+  "author": "ultrapolar",
+  "authorUrl": "https://github.com/ultrapolar/polarxobsidian",
+  "isDesktopOnly": true
+}
